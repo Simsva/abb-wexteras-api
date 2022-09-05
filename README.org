@@ -1,0 +1,57 @@
+#+TITLE: Wexterås API
+#+AUTHOR: Simon Ericsson
+#+EMAIL: simon@krlsg.se
+
+#+DESCRIPTION: Documentation for the Wexterås API
+#+LANGUAGE: en
+
+#+OPTIONS: ^:nil
+#+OPTIONS: toc:3
+
+An API for use by our smart greenhouse. Source code availabe at [[https://github.com/Simsva/abb-wexteras-api][GitHub]].
+
+See [[https://github.com/Simsva/abb-wexteras-api/blob/master/nginx_example.conf][nginx_example.conf]] for information on running the API.
+
+* Basic information
+** Path arguments
+Arguments provided at the end of the API URL separated by slashes.
+
+/Example/: ~.../list/arg1/arg2~, where ~arg1~ and ~arg2~ are path arguments.
+
+** Query arguments
+Arguments provided using the query string at the end of the URL.
+
+/Example/: ~.../entries?fields=name,description&order=score~, where ~fields = name,description~ and ~order = score~ are query arguments.
+
+* TODO Planned [0/0] [100%]
+
+* API Usage
+*Base URL*: [[https://api.simsva.se/wexteras/]] (Or another URL pointed to the same PHP script provided in the repository)
+API paths are appended at the end of the *Base URL*.
+
+** Paths
+*** data/ (GET)
+Gets data from a users list.
+
+Returns a list of objects.
+
+**** *Query arguments*:
+ - *id* (/required/)
+
+   ID of device whose data you want.
+
+ - *fields*
+
+   Comma separated list of which fields to return.
+
+ - *limit*
+
+   Limit the amount of data points to return.
+
+ - *before*
+
+   Only return data points after a specified UNIX timestamp (with milliseconds).
+
+ - *after*
+
+   Same as *before*, but after. Both can be specified at the same time.

@@ -1,0 +1,121 @@
+<?php // -*- mode: php; -*-
+// vim: ft=php sw=2 ts=2 et
+
+// Load config
+$config = include("./config/wexteras.php");
+
+// CORS
+header("Access-Control-Allow-Origin: " . $config["origin"]);
+header("Access-Control-Allow-Headers: Authorization, Origin, Content-Type, X-Auth-Token");
+header("Access-Control-Allow-Methods: GET, POST, PATCH, DELETE");
+header("Access-Control-Allow-Credentials: true");
+
+// Save PATCH request data
+parse_str(file_get_contents('php://input'), $_PATCH);
+
+// Get input variables
+$api_vars = preg_split("/\//", ltrim($_SERVER["PATH_INFO"], '/'));
+parse_str($_SERVER["QUERY_STRING"], $query_vars);
+
+// Filter out empty variables
+$api_vars = array_filter($api_vars, static function($var){return $var !== NULL && $var !== "";} );
+
+$api_url = "{$_SERVER["REQUEST_SCHEME"]}://{$_SERVER["HTTP_HOST"]}{$_SERVER["SCRIPT_NAME"]}";
+
+// Connect to Postgres
+$pg_auth = "";
+foreach(array("host", "dbname", "user", "password") as $key) {
+  if(array_key_exists($key, $config))
+    $pg_auth .= " " . $key . "=" . $config[$key];
+}
+// $pg_auth = "host=" . $config["host"] . " dbname=" . $config["dbname"] . " user=" . $config["user"] . " password=" . $config["password"];
+$dbconn = pg_connect(ltrim($pg_auth))
+  or die("Could not connect to Postgres: " . pg_last_error());
+
+// Get only specified fields/columns from Postgres query
+// Safer than using user controlled data in the query
+function get_fields($result, $fields) {
+  if (isset($fields) && $fields !== "*") {
+    $fields = preg_split("/,/", $fields);
+
+    $out = array();
+    while ($row = pg_fetch_array($result)) {
+      $parsed_row = array();
+      foreach ($fields as $field) {
+        if (isset($row[$field])) {
+          $parsed_row[$field] = $row[$field];
+        }
+      }
+      $out[] = $parsed_row;
+    }
+  } else {
+    $out = pg_fetch_all($result);
+  }
+  return $out;
+}
+
+function require_args($vars, $len) {
+  if (sizeof($vars) < $len) {
+    http_response_code(400);
+    die("Invalid arguments");
+  }
+  return true;
+}
+
+switch ($api_vars[0]) {
+case "data":
+  switch($_SERVER["REQUEST_METHOD"]) {
+  case "GET":
+    if (!isset($query_vars["id"])) {
+      http_response_code(400);
+      die("id query argument needs to be provied");
+    }
+
+    $i = 1;
+    $sql = "SELECT * FROM data_unix";
+    $where = " WHERE id = $" . $i++;
+    $vars = array($query_vars["id"]);
+
+    // Limit
+    if(isset($query_vars["limit"]) and is_numeric($query_vars["limit"])) {
+      $sql .= " LIMIT $" . $i++;
+      $vars[] = $query_vars["limit"];
+    }
+
+    // "Frame"
+    if(isset($query_vars["before"]) and is_numeric($query_vars["before"])) {
+      $where .= " AND t < $" . $i++;
+      $vars[] = $query_vars["before"];
+    }
+    if(isset($query_vars["after"]) and is_numeric($query_vars["after"])) {
+      $where .= " AND t > $" . $i++;
+      $vars[] = $query_vars["after"];
+    }
+
+    // Request
+    $sql .= $where . " ORDER BY t ASC";
+    pg_prepare($dbconn, "list", $sql)
+      or die("Failed to prepare query: " . pg_last_error());
+    $result = pg_execute($dbconn, "list", $vars);
+
+    $data = json_encode(get_fields($result, $query_vars["fields"]??null));
+    if($data == "null") http_response_code(404);
+    echo $data;
+    break;
+
+  default:
+    http_response_code(400);
+    die("Invalid request method: " . $_SERVER["REQUEST_METHOD"]);
+  }
+  break;
+
+case "dump":
+  echo "\$_SERVER: ";     print_r($_SERVER);
+  echo "<br/>\$_POST: ";  print_r($_POST);
+  echo "<br/>\$_PATCH: "; print_r($_PATCH);
+  break;
+
+default:
+  http_response_code(400);
+  die("Invalid method: " . $api_vars[0]);
+}
