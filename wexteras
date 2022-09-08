@@ -34,24 +34,56 @@ $dbconn = pg_connect(ltrim($pg_auth))
 
 // Get only specified fields/columns from Postgres query
 // Safer than using user controlled data in the query
-function get_fields($result, $fields) {
+function get_fields($result, $fields, $types) {
   if (isset($fields) && $fields !== "*") {
     $fields = preg_split("/,/", $fields);
 
     $out = array();
-    while ($row = pg_fetch_array($result)) {
-      $parsed_row = array();
+    while ($row = pg_fetch_array($result, null, PGSQL_ASSOC)) {
       foreach ($fields as $field) {
         if (isset($row[$field])) {
-          $parsed_row[$field] = $row[$field];
+          $row[$field] = parse_type($row[$field], $types[$field]??"string");
         }
       }
-      $out[] = $parsed_row;
+      $out[] = $row;
     }
   } else {
-    $out = pg_fetch_all($result);
+    $out = array();
+    while($row = pg_fetch_array($result, null, PGSQL_ASSOC)) {
+      foreach(array_keys($row) as $field) {
+        $row[$field] = parse_type($row[$field], $types[$field]??"string");
+      }
+      $out[] = $row;
+    }
   }
   return $out;
+}
+
+function sql_bool($x) {
+  return ($x == "t")
+       ? "true"
+       : (($x == "f")
+       ? "false"
+       : $x);
+}
+
+function parse_type($var, $type) {
+  $o = array("flags"=>FILTER_NULL_ON_FAILURE);
+  switch($type) {
+  case "int":
+    $var = filter_var($var, FILTER_VALIDATE_INT, $o);
+    break;
+
+  case "float":
+    $var = filter_var($var, FILTER_VALIDATE_FLOAT, $o);
+    break;
+
+  case "bool":
+    $var = filter_var(sql_bool($var), FILTER_VALIDATE_BOOL, $o);
+    break;
+  }
+
+  return $var;
 }
 
 function require_args($vars, $len) {
@@ -62,54 +94,84 @@ function require_args($vars, $len) {
   return true;
 }
 
-switch ($api_vars[0]) {
-case "data":
-  switch($_SERVER["REQUEST_METHOD"]) {
-  case "GET":
-    if (!isset($query_vars["id"])) {
-      http_response_code(400);
-      die("id query argument needs to be provied");
-    }
+$field_types = array(
+  "data" => array(
+    "t" => "int",
+    "temp" => "float",
+    "humidity" => "float",
+    "id" => "int",
+  ),
+  "settings" => array(
+    "id" => "int",
+    "rpm" => "int",
+    "door" => "bool",
+    "master" => "bool",
+  ),
+);
 
-    $i = 1;
-    $sql = "SELECT * FROM data_unix";
-    $where = " WHERE id = $" . $i++;
-    $vars = array($query_vars["id"]);
-
-    // Limit
-    if(isset($query_vars["limit"]) and is_numeric($query_vars["limit"])) {
-      $sql .= " LIMIT $" . $i++;
-      $vars[] = $query_vars["limit"];
-    }
-
-    // "Frame"
-    if(isset($query_vars["before"]) and is_numeric($query_vars["before"])) {
-      $where .= " AND t < $" . $i++;
-      $vars[] = $query_vars["before"];
-    }
-    if(isset($query_vars["after"]) and is_numeric($query_vars["after"])) {
-      $where .= " AND t > $" . $i++;
-      $vars[] = $query_vars["after"];
-    }
-
-    // Request
-    $sql .= $where . " ORDER BY t ASC";
-    pg_prepare($dbconn, "list", $sql)
-      or die("Failed to prepare query: " . pg_last_error());
-    $result = pg_execute($dbconn, "list", $vars);
-
-    $data = json_encode(get_fields($result, $query_vars["fields"]??null));
-    if($data == "null") http_response_code(404);
-    echo $data;
-    break;
-
-  default:
+$method = "{$_SERVER["REQUEST_METHOD"]} {$api_vars[0]}";
+switch ($method) {
+case "GET data":
+  if (!isset($query_vars["id"])) {
     http_response_code(400);
-    die("Invalid request method: " . $_SERVER["REQUEST_METHOD"]);
+    die("id query argument needs to be provied");
   }
+
+  $i = 1;
+  $sql = "SELECT * FROM data_unix";
+  $vars = array();
+
+  // Limit
+  $limit = "";
+  if(isset($query_vars["limit"]) and is_numeric($query_vars["limit"])) {
+    $limit .= " LIMIT $" . $i++;
+    $vars[] = $query_vars["limit"];
+  }
+
+  $where = " WHERE id = $" . $i++;
+  $vars[] = $query_vars["id"];
+
+  // "Frame"
+  if(isset($query_vars["before"]) and is_numeric($query_vars["before"])) {
+    $where .= " AND t < $" . $i++;
+    $vars[] = $query_vars["before"];
+  }
+  if(isset($query_vars["after"]) and is_numeric($query_vars["after"])) {
+    $where .= " AND t > $" . $i++;
+    $vars[] = $query_vars["after"];
+  }
+
+  // Request
+  $sql .= $where . " ORDER BY t ASC" . $limit;
+  pg_prepare($dbconn, "get_data", $sql)
+    or die("Failed to prepare query: " . pg_last_error());
+  $result = pg_execute($dbconn, "get_data", $vars);
+
+  $data = json_encode(get_fields($result, $query_vars["fields"]??null, $field_types["data"]??null));
+  if($data == "null") http_response_code(404);
+  echo $data;
   break;
 
-case "dump":
+case "GET settings":
+  if (!isset($query_vars["id"])) {
+    http_response_code(400);
+    die("id query argument needs to be provied");
+  }
+
+  $i = 1;
+  $sql = "SELECT * FROM controls WHERE id = $" . $i++;
+  $vars = array($query_vars["id"]);
+
+  pg_prepare($dbconn, "get_controls", $sql)
+    or die("Failed to prepare query: " . pg_last_error());
+  $result = pg_execute($dbconn, "get_controls", $vars);
+
+  $data = json_encode(get_fields($result, $query_vars["fields"]??null, $field_types["settings"]??null)[0]??null);
+  if($data == "null") http_response_code(404);
+  echo $data;
+  break;
+
+case "GET dump":
   echo "\$_SERVER: ";     print_r($_SERVER);
   echo "<br/>\$_POST: ";  print_r($_POST);
   echo "<br/>\$_PATCH: "; print_r($_PATCH);
@@ -117,5 +179,5 @@ case "dump":
 
 default:
   http_response_code(400);
-  die("Invalid method: " . $api_vars[0]);
+  die("Invalid method: " . $method);
 }
