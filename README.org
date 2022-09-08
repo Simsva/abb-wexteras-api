@@ -21,7 +21,7 @@ Arguments provided at the end of the API URL separated by slashes.
 ** Query arguments
 Arguments provided using the query string at the end of the URL.
 
-/Example/: ~.../entries?fields=name,description&order=score~, where ~fields = name,description~ and ~order = score~ are query arguments.
+/Example/: ~.../entries?fields=name,description&limit=50~, where ~fields = name,description~ and ~limit = 50~ are query arguments.
 
 ** POST/PATCH arguments
 All POST and PATCH arguments should be provided as a "query string."
@@ -35,7 +35,7 @@ All POST and PATCH arguments should be provided as a "query string."
 API paths are appended at the end of the *Base URL*.
 
 ** Paths
-*** data/ (GET)
+*** GET data
 Gets data from a device.
 
 Returns a list of objects.
@@ -61,7 +61,7 @@ Returns a list of objects.
 
    Same as *before*, but after. Both can be specified at the same time.
 
-*** settings/ (GET)
+*** GET settings
 Returns current settings for a device as one object.
 
 Returns ~404~ if the specified ~id~ does not exist.
@@ -75,7 +75,7 @@ Returns ~404~ if the specified ~id~ does not exist.
 
    Comma separated list of which fields to return.
 
-*** settings/ (PATCH)
+*** PATCH settings
 Modify settings for a device.
 
 **** Query arguments:
