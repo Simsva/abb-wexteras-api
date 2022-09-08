@@ -50,8 +50,8 @@ function get_fields($result, $fields, $types) {
   } else {
     $out = array();
     while($row = pg_fetch_array($result, null, PGSQL_ASSOC)) {
-      foreach(array_keys($row) as $field) {
-        $row[$field] = parse_type($row[$field], $types[$field]??"string");
+      foreach($row as $field => &$val) {
+        $val = parse_type($val, $types[$field]??"string");
       }
       $out[] = $row;
     }
@@ -64,6 +64,14 @@ function sql_bool($x) {
        ? "true"
        : (($x == "f")
        ? "false"
+       : $x);
+}
+
+function as_sql_bool($x) {
+  return ($x == true)
+       ? "t"
+       : (($x == false)
+       ? "f"
        : $x);
 }
 
@@ -114,7 +122,7 @@ switch ($method) {
 case "GET data":
   if (!isset($query_vars["id"])) {
     http_response_code(400);
-    die("id query argument needs to be provied");
+    die("'id' query argument needs to be provied");
   }
 
   $i = 1;
@@ -131,7 +139,7 @@ case "GET data":
   $where = " WHERE id = $" . $i++;
   $vars[] = $query_vars["id"];
 
-  // "Frame"
+  // Timeframe
   if(isset($query_vars["before"]) and is_numeric($query_vars["before"])) {
     $where .= " AND t < $" . $i++;
     $vars[] = $query_vars["before"];
@@ -155,7 +163,7 @@ case "GET data":
 case "GET settings":
   if (!isset($query_vars["id"])) {
     http_response_code(400);
-    die("id query argument needs to be provied");
+    die("'id' query argument needs to be provied");
   }
 
   $i = 1;
@@ -171,7 +179,54 @@ case "GET settings":
   echo $data;
   break;
 
+case "PATCH settings":
+  if (!isset($query_vars["id"])) {
+    http_response_code(400);
+    die("'id' query argument needs to be provied");
+  }
+
+  $allowed_keys = array(
+    "rpm" => "int",
+    "door" => "bool",
+    "master" => "bool",
+  );
+
+  $keys = "";
+  $vars = array($query_vars["id"]);
+  $i = 2;
+  foreach($_PATCH as $key => $val) {
+    if(array_key_exists($key, $allowed_keys)) {
+      $keys .= "{$key} = $" . $i++ . ", ";
+      $tmp = parse_type($val, $allowed_keys[$key]);
+      if($allowed_keys[$key] == "bool")
+        $tmp = as_sql_bool($tmp);
+      if($tmp == null) {
+        http_response_code(400);
+        die("{$key} cannot be null");
+      }
+      $vars[] = $tmp;
+    } else {
+      http_response_code(400);
+      die("Disallowed key: '{$key}'");
+    }
+  }
+  $keys = rtrim($keys, ", ");
+
+  if($keys == "") {
+    http_response_code(400);
+    die("Nothing specified in request body");
+  }
+
+  $sql = "UPDATE controls SET " . $keys . " WHERE id = $1";
+  pg_prepare($dbconn, "patch_settings", $sql)
+    or die("Failed to prepare query: " . pg_last_error());
+  $result = pg_execute($dbconn, "patch_settings", $vars);
+    // or die("Failed to execute query: " . pg_last_error());
+  break;
+
 case "GET dump":
+case "POST dump":
+case "PATCH dump":
   echo "\$_SERVER: ";     print_r($_SERVER);
   echo "<br/>\$_POST: ";  print_r($_POST);
   echo "<br/>\$_PATCH: "; print_r($_PATCH);
