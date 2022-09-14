@@ -61,6 +61,27 @@ Returns a list of objects.
 
    Same as *before*, but after. Both can be specified at the same time.
 
+*** POST data
+Posts a data point (from a device).
+
+**** POST arguments:
+- *id* (/required/)
+
+  ID of the device.
+
+- *token* (/required/)
+
+  Secret token of the device, stored in the database.
+
+- *temp*
+
+  Temperature to post. -1024.0 if left unspecified.
+
+- *humidity*
+
+  Humidity to post. -1024.0 if left unspecified.
+
+
 *** GET settings
 Returns current settings for a device as one object.
 
