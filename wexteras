@@ -40,12 +40,13 @@ function get_fields($result, $fields, $types) {
 
     $out = array();
     while ($row = pg_fetch_array($result, null, PGSQL_ASSOC)) {
+      $filtered_row = array();
       foreach ($fields as $field) {
         if (isset($row[$field])) {
-          $row[$field] = parse_type($row[$field], $types[$field]??"string");
+          $filtered_row[$field] = parse_type($row[$field], $types[$field]??"string");
         }
       }
-      $out[] = $row;
+      $out[] = $filtered_row;
     }
   } else {
     $out = array();
@@ -158,6 +159,34 @@ case "GET data":
   $data = json_encode(get_fields($result, $query_vars["fields"]??null, $field_types["data"]??null));
   if($data == "null") http_response_code(404);
   echo $data;
+  break;
+
+case "POST data":
+  if (!isset($_POST["id"]) || !isset($_POST["token"])) {
+    http_response_code(400);
+    die("'id' ans 'token' POST arguments needs to be provied");
+  }
+
+  $sql = "SELECT token FROM devices WHERE id = $1";
+  pg_prepare($dbconn, "get_token", $sql)
+    or die("Failed to prepare query: " . pg_last_error());
+  $result = pg_execute($dbconn, "get_token", array($_POST["id"]));
+  $token = pg_fetch_result($result, 0, "token");
+  if($token != $_POST["token"]) {
+    http_response_code(401);
+    die("invalid token for id " . $_POST["id"]);
+  }
+
+  $sql = "INSERT INTO data (id, temp, humidity) VALUES ($1, $2, $3)";
+  $vars = array(
+    $_POST["id"],
+    isset($_POST["temp"]) ? $_POST["temp"] : -1024.0,
+    isset($_POST["humidity"]) ? $_POST["humidity"] : -1024.0
+  );
+  pg_prepare($dbconn, "post_data", $sql)
+    or die("Failed to prepare query: " . pg_last_error());
+  pg_execute($dbconn, "post_data", $vars);
+
   break;
 
 case "GET settings":
