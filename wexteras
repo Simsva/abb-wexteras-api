@@ -6,12 +6,27 @@ $config = include("./config/wexteras.php");
 
 // CORS
 header("Access-Control-Allow-Origin: " . $config["origin"]);
-header("Access-Control-Allow-Headers: Authorization, Origin, Content-Type, X-Auth-Token");
-header("Access-Control-Allow-Methods: GET, POST, PATCH, DELETE");
+header("Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS");
 header("Access-Control-Allow-Credentials: true");
 
+if($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+  header("Access-Control-Allow-Headers: Origin, Content-Type, Accept, X-Requested-With");
+  header("Access-Control-Max-Age: 86400");
+  header("Cache-Control: public, max-age=86400");
+  header("Vary: origin");
+  exit(0);
+}
+
 // Save PATCH request data
-parse_str(file_get_contents('php://input'), $_PATCH);
+switch($_SERVER["CONTENT_TYPE"]) {
+case "application/json":
+  $_PATCH = json_decode(file_get_contents("php://input"));
+  break;
+
+default:
+  parse_str(file_get_contents("php://input"), $_PATCH);
+  break;
+}
 
 // Get input variables
 $api_vars = preg_split("/\//", ltrim($_SERVER["PATH_INFO"], '/'));
@@ -113,7 +128,8 @@ $field_types = array(
   "settings" => array(
     "id" => "int",
     "rpm" => "int",
-    "door" => "bool",
+    "water" => "int",
+    "door" => "int",
     "master" => "bool",
   ),
 );
@@ -216,7 +232,8 @@ case "PATCH settings":
 
   $allowed_keys = array(
     "rpm" => "int",
-    "door" => "bool",
+    "water" => "int",
+    "door" => "int",
     "master" => "bool",
   );
 
@@ -229,10 +246,11 @@ case "PATCH settings":
       $tmp = parse_type($val, $allowed_keys[$key]);
       if($allowed_keys[$key] == "bool")
         $tmp = as_sql_bool($tmp);
-      if($tmp == null) {
-        http_response_code(400);
-        die("{$key} cannot be null");
-      }
+      /* NOTE: in PHP 0 == false == null so this does not work */
+      //   ($tmp == null) {
+      //   http_response_code(400);
+      //   die("{$key} cannot be null");
+      // }
       $vars[] = $tmp;
     } else {
       http_response_code(400);

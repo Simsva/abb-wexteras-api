@@ -1,11 +1,11 @@
-#+TITLE: Wexterås API
+#+Title: Wexterås API
 #+AUTHOR: Simon Ericsson
 #+EMAIL: simon@krlsg.se
 
 #+DESCRIPTION: Documentation for the Wexterås API
 #+LANGUAGE: en
 
-#+OPTIONS: ^:nil
+#+OPTIONS: ^:{}
 #+OPTIONS: toc:3
 
 An API for use by our smart greenhouse. Source code availabe at [[https://github.com/Simsva/abb-wexteras-api][GitHub]].
@@ -111,9 +111,14 @@ Modify settings for a device.
 
    An integer value from 0 to 1023 representing fan speed.
 
- - *door* (bool)
+ - *water* (int)
 
-   Open/close door.
+   The number of seconds to wait between each irrigation.
+   Clamped between 0 (constant watering) to 2^{31}-1 seconds.
+
+ - *door* (int)
+
+   An integer value from 0 to 180. 0 means the door is closed and 180 means it is fully open.
 
  - *master* (bool)
 
