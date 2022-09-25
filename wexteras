@@ -280,6 +280,6 @@ case "PATCH dump":
   break;
 
 default:
-  http_response_code(400);
+  http_response_code(404);
   die("Invalid method: " . $method);
 }
