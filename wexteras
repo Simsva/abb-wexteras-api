@@ -167,7 +167,7 @@ case "GET data":
   }
 
   // Request
-  $sql .= $where . " ORDER BY t ASC" . $limit;
+  $sql .= $where . " ORDER BY t DESC" . $limit;
   pg_prepare($dbconn, "get_data", $sql)
     or die("Failed to prepare query: " . pg_last_error());
   $result = pg_execute($dbconn, "get_data", $vars);
